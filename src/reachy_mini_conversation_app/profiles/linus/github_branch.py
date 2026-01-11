@@ -6,6 +6,7 @@ from pathlib import Path
 
 from git import Repo, GitCommandError, InvalidGitRepositoryError
 
+from .github_env_vars import GITHUB_ENV_VARS
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
 
@@ -24,6 +25,7 @@ class GitHubBranchTool(Tool):
         "Manage git branches in a local repository. "
         "Can create new branches, switch between branches, or list all branches."
     )
+    required_env_vars = GITHUB_ENV_VARS
     parameters_schema = {
         "type": "object",
         "properties": {

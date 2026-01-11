@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from github import Github, GithubException
 
+from .github_env_vars import GITHUB_ENV_VARS
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
 
@@ -20,6 +21,7 @@ class GitHubUpdatePRTool(Tool):
         "Update an existing pull request on GitHub. "
         "Can modify title, body, labels, assignees, reviewers, and milestone."
     )
+    required_env_vars = GITHUB_ENV_VARS
     parameters_schema = {
         "type": "object",
         "properties": {

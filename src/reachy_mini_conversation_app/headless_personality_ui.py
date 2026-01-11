@@ -17,6 +17,7 @@ from fastapi import FastAPI
 
 from .config import config, reload_config
 from .openai_realtime import OpenaiRealtimeHandler
+from .tools.core_tools import BASE_CONFIG_VARS, EnvVar, get_config_vars
 from .headless_personality import (
     DEFAULT_OPTION,
     _sanitize_name,
@@ -39,24 +40,112 @@ __all__ = [
     "available_tools_for",
     "resolve_profile_dir",
     "read_instructions_for",
+    "get_config_vars",
+    "collect_profile_env_vars",
 ]
 
 
-# Configuration variables that can be managed via the UI
-# Format: (env_var_name, config_attr_name, is_secret, description)
-CONFIG_VARS = [
-    ("OPENAI_API_KEY", "OPENAI_API_KEY", True, "OpenAI API key (required for voice)"),
-    ("MODEL_NAME", "MODEL_NAME", False, "OpenAI model name"),
-    ("HF_TOKEN", "HF_TOKEN", True, "Hugging Face token (optional, for vision)"),
-    ("HF_HOME", "HF_HOME", False, "Hugging Face cache directory"),
-    ("LOCAL_VISION_MODEL", "LOCAL_VISION_MODEL", False, "Local vision model path"),
-    ("ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY", True, "Anthropic API key (for Linus profile)"),
-    ("ANTHROPIC_MODEL", "ANTHROPIC_MODEL", False, "Anthropic model name"),
-    ("GITHUB_TOKEN", "GITHUB_TOKEN", True, "GitHub token (for Linus profile)"),
-    ("GITHUB_DEFAULT_OWNER", "GITHUB_DEFAULT_OWNER", False, "Default GitHub owner/org"),
-    ("GITHUB_OWNER_EMAIL", "GITHUB_OWNER_EMAIL", False, "Email for git commits"),
-    ("REACHY_MINI_CUSTOM_PROFILE", "REACHY_MINI_CUSTOM_PROFILE", False, "Custom profile name"),
-]
+def collect_profile_env_vars(profile_name: str) -> list[EnvVar]:
+    """Collect environment variables required by a specific profile.
+
+    Parses the profile's tools.txt file and collects required_env_vars
+    from each tool without fully initializing the tool registry.
+
+    Args:
+        profile_name: Name of the profile (e.g., "linus", "default")
+
+    Returns:
+        List of unique EnvVar instances (base vars + profile tool vars)
+
+    """
+    import inspect
+    import importlib
+
+    from .tools.core_tools import Tool
+
+    seen: dict[str, EnvVar] = {}
+    result: list[EnvVar] = []
+
+    # Add base config vars first
+    for env_var in BASE_CONFIG_VARS:
+        if env_var.name not in seen:
+            seen[env_var.name] = env_var
+            result.append(env_var)
+
+    # Resolve profile directory
+    profile_dir = resolve_profile_dir(profile_name)
+    tools_txt = profile_dir / "tools.txt"
+
+    if not tools_txt.exists():
+        return result
+
+    # Parse tool names from tools.txt
+    try:
+        lines = tools_txt.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return result
+
+    tool_names = [
+        line.strip()
+        for line in lines
+        if line.strip() and not line.strip().startswith("#")
+    ]
+
+    # Try to load each tool and collect env vars
+    profiles_pkg = "reachy_mini_conversation_app.profiles"
+    shared_pkg = "reachy_mini_conversation_app.tools"
+
+    for tool_name in tool_names:
+        tool_class = None
+
+        # Try profile-local tool first
+        try:
+            mod = importlib.import_module(f"{profiles_pkg}.{profile_name}.{tool_name}")
+            for _, cls in inspect.getmembers(mod, inspect.isclass):
+                if issubclass(cls, Tool) and cls is not Tool and hasattr(cls, "name"):
+                    tool_class = cls
+                    break
+        except Exception:
+            pass
+
+        # Try shared tools if not found
+        if tool_class is None:
+            try:
+                mod = importlib.import_module(f"{shared_pkg}.{tool_name}")
+                for _, cls in inspect.getmembers(mod, inspect.isclass):
+                    if issubclass(cls, Tool) and cls is not Tool and hasattr(cls, "name"):
+                        tool_class = cls
+                        break
+            except Exception:
+                pass
+
+        # Collect env vars from tool
+        if tool_class is not None:
+            for env_var in getattr(tool_class, "required_env_vars", []):
+                if env_var.name not in seen:
+                    seen[env_var.name] = env_var
+                    result.append(env_var)
+
+    return result
+
+
+def _get_config_vars_list() -> list[tuple[str, str, bool, str]]:
+    """Get configuration variables dynamically from tools.
+
+    This function returns the list of config vars from get_config_vars(),
+    which collects BASE_CONFIG_VARS plus any tool-specific env vars.
+
+    Returns:
+        List of tuples: (env_var_name, config_attr_name, is_secret, description)
+
+    """
+    return get_config_vars()
+
+
+# Backward compatibility alias - now dynamically generated
+# Note: This is evaluated at import time, so it won't include tool vars
+# that are loaded later. Use _get_config_vars_list() for dynamic access.
+CONFIG_VARS = _get_config_vars_list()
 
 
 def mount_personality_routes(
@@ -141,7 +230,7 @@ def mount_personality_routes(
         instructions: str = Body("", embed=True),
         tools_text: str = Body("", embed=True),
         voice: Optional[str] = Body("cedar", embed=True),
-    ) -> dict[str, Any] | JSONResponse:
+    ) -> Any:
         name_s = _sanitize_name(name)
         if not name_s:
             return JSONResponse({"ok": False, "error": "invalid_name"}, status_code=400)
@@ -167,7 +256,7 @@ def mount_personality_routes(
         instructions: str = Body("", embed=True),
         tools_text: str = Body("", embed=True),
         voice: Optional[str] = Body("cedar", embed=True),
-    ) -> dict[str, Any] | JSONResponse:
+    ) -> Any:
         name_s = _sanitize_name(name)
         if not name_s:
             return JSONResponse({"ok": False, "error": "invalid_name"}, status_code=400)
@@ -186,7 +275,7 @@ def mount_personality_routes(
     @app.get("/personalities/save_raw")
     async def _save_raw_get(
         name: str, instructions: str = "", tools_text: str = "", voice: str = "cedar"
-    ) -> dict[str, Any] | JSONResponse:
+    ) -> Any:
         name_s = _sanitize_name(name)
         if not name_s:
             return JSONResponse({"ok": False, "error": "invalid_name"}, status_code=400)
@@ -213,7 +302,7 @@ def mount_personality_routes(
         name: str | None = None,
         persist: Optional[bool] = None,
         request: Optional[Request] = None,
-    ) -> dict[str, Any] | JSONResponse:
+    ) -> Any:
         loop = get_loop()
         if loop is None:
             return JSONResponse({"ok": False, "error": "loop_unavailable"}, status_code=503)
@@ -351,7 +440,7 @@ def mount_personality_routes(
     def _get_config() -> dict[str, Any]:
         """Get all configuration variables with masked secrets."""
         variables = []
-        for env_key, config_attr, is_secret, description in CONFIG_VARS:
+        for env_key, config_attr, is_secret, description in _get_config_vars_list():
             value = getattr(config, config_attr, None)
             variables.append({
                 "key": env_key,
@@ -363,13 +452,13 @@ def mount_personality_routes(
         return {"variables": variables}
 
     @app.post("/config/reload")
-    def _reload_config() -> dict[str, Any] | JSONResponse:
+    def _reload_config() -> Any:
         """Reload configuration from .env file."""
         try:
             reload_config()
             # Return updated config
             variables = []
-            for env_key, config_attr, is_secret, description in CONFIG_VARS:
+            for env_key, config_attr, is_secret, description in _get_config_vars_list():
                 value = getattr(config, config_attr, None)
                 variables.append({
                     "key": env_key,
@@ -382,10 +471,44 @@ def mount_personality_routes(
         except Exception as e:
             return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
+    @app.get("/config/profile/{profile_name}")
+    def _get_profile_config(profile_name: str) -> Any:
+        """Get environment variables required by a specific profile.
+
+        This endpoint allows the UI to show which env vars are needed
+        before applying a profile.
+        """
+        # Check if profile exists
+        if profile_name != DEFAULT_OPTION:
+            profile_dir = resolve_profile_dir(profile_name)
+            if not profile_dir.exists() or not profile_dir.is_dir():
+                return JSONResponse(
+                    {"error": f"Profile not found: {profile_name}"},
+                    status_code=404,
+                )
+
+        env_vars = collect_profile_env_vars(profile_name)
+        variables = []
+        for env_var in env_vars:
+            value = getattr(config, env_var.name, None)
+            variables.append({
+                "key": env_var.name,
+                "value": _mask_secret(value, env_var.is_secret),
+                "is_set": value is not None and value != "",
+                "is_secret": env_var.is_secret,
+                "description": env_var.description,
+                "required": env_var.required,
+                "default": env_var.default,
+            })
+        return {
+            "profile": profile_name,
+            "variables": variables,
+        }
+
     @app.get("/config/{key}")
-    def _get_config_key(key: str) -> dict[str, Any] | JSONResponse:
+    def _get_config_key(key: str) -> Any:
         """Get a specific configuration variable."""
-        for env_key, config_attr, is_secret, description in CONFIG_VARS:
+        for env_key, config_attr, is_secret, description in _get_config_vars_list():
             if env_key == key:
                 value = getattr(config, config_attr, None)
                 return {
@@ -402,11 +525,11 @@ def mount_personality_routes(
         key: str,
         value: Optional[str] = Body(None, embed=True),
         persist: bool = Body(True, embed=True),
-    ) -> dict[str, Any] | JSONResponse:
+    ) -> Any:
         """Set a configuration variable."""
         # Find the config variable
         config_info = None
-        for env_key, config_attr, is_secret, description in CONFIG_VARS:
+        for env_key, config_attr, is_secret, description in _get_config_vars_list():
             if env_key == key:
                 config_info = (env_key, config_attr, is_secret, description)
                 break
@@ -434,11 +557,11 @@ def mount_personality_routes(
         }
 
     @app.delete("/config/{key}")
-    def _delete_config_key(key: str, persist: bool = True) -> dict[str, Any] | JSONResponse:
+    def _delete_config_key(key: str, persist: bool = True) -> Any:
         """Remove a configuration variable."""
         # Find the config variable
         config_info = None
-        for env_key, config_attr, is_secret, description in CONFIG_VARS:
+        for env_key, config_attr, is_secret, description in _get_config_vars_list():
             if env_key == key:
                 config_info = (env_key, config_attr, is_secret, description)
                 break

@@ -10,6 +10,7 @@ import anthropic
 from git import Repo, GitCommandError, InvalidGitRepositoryError
 from anthropic.types import TextBlock
 
+from .github_env_vars import GITHUB_ENV_VARS
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
 from reachy_mini_conversation_app.profiles.linus.commit_rules import (
@@ -54,6 +55,7 @@ class GitHubCommitTool(Tool):
         "IMPORTANT: Always ask user for confirmation before calling this tool. "
         "Commit types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert."
     )
+    required_env_vars = GITHUB_ENV_VARS
     parameters_schema = {
         "type": "object",
         "properties": {
