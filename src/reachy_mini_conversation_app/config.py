@@ -34,6 +34,10 @@ class Config:
     REACHY_MINI_CUSTOM_PROFILE = os.getenv("REACHY_MINI_CUSTOM_PROFILE")
     logger.debug(f"Custom Profile: {REACHY_MINI_CUSTOM_PROFILE}")
 
+    # OAuth2 Device Code Authentication (auth.goabonga.com)
+    OAUTH2_CLIENT_ID = os.getenv("OAUTH2_CLIENT_ID")
+    OAUTH2_ISSUER = os.getenv("OAUTH2_ISSUER", "https://auth.goabonga.com")
+
 
 config = Config()
 
