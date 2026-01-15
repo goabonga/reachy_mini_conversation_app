@@ -1,24 +1,24 @@
 """Tests for OAuth2 authentication tools."""
 
-import asyncio
 import os
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
 from reachy_mini_conversation_app.tools.authenticate import (
-    Authenticate,
-    CancelAuthentication,
-    CheckToken,
     Logout,
     Whoami,
+    CheckToken,
+    Authenticate,
+    CancelAuthentication,
     cancel_polling,
-    decode_jwt_payload,
-    format_code_for_speech,
     get_token_info,
     is_polling_active,
+    decode_jwt_payload,
+    format_code_for_speech,
 )
-from reachy_mini_conversation_app.tools.core_tools import ToolDependencies
 
 
 # ============================================================================
@@ -37,12 +37,12 @@ def mock_deps():
 
 @pytest.fixture
 def sample_jwt():
-    """A sample JWT token for testing (not cryptographically valid)."""
+    """Create a sample JWT token for testing (not cryptographically valid)."""
     # Header: {"alg": "RS256", "typ": "JWT"}
     # Payload: {"sub": "user123", "name": "John Doe", "email": "john@example.com", "exp": 9999999999}
     # This is a base64url encoded payload
-    import base64
     import json
+    import base64
 
     header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "typ": "JWT"}).encode()).decode().rstrip("=")
     payload = base64.urlsafe_b64encode(
@@ -62,9 +62,9 @@ def sample_jwt():
 
 @pytest.fixture
 def expired_jwt():
-    """A JWT token with expired timestamp."""
-    import base64
+    """Create a JWT token with expired timestamp."""
     import json
+    import base64
 
     header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256", "typ": "JWT"}).encode()).decode().rstrip("=")
     payload = base64.urlsafe_b64encode(

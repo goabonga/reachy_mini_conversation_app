@@ -1,10 +1,10 @@
 """OAuth2 Device Code authentication tool for Goabonga Cloud."""
 
-import asyncio
-import base64
-import json
-import logging
 import os
+import json
+import base64
+import asyncio
+import logging
 from typing import Any, Dict, Optional
 
 import httpx
@@ -12,10 +12,11 @@ import httpx
 from reachy_mini_conversation_app.config import config
 from reachy_mini_conversation_app.tools.core_tools import Tool, ToolDependencies
 
+
 logger = logging.getLogger(__name__)
 
 # Global state for managing authentication polling
-_polling_task: Optional[asyncio.Task] = None
+_polling_task: Optional[asyncio.Task[None]] = None
 _polling_cancelled = False
 
 
@@ -52,7 +53,8 @@ def decode_jwt_payload(token: str) -> Optional[Dict[str, Any]]:
             payload_b64 += "=" * padding
 
         payload_json = base64.urlsafe_b64decode(payload_b64)
-        return json.loads(payload_json)
+        result: Dict[str, Any] = json.loads(payload_json)
+        return result
     except Exception as e:
         logger.error(f"Failed to decode JWT: {e}")
         return None
@@ -177,8 +179,10 @@ class Authenticate(Tool):
 
         except httpx.HTTPError as e:
             logger.error(f"Device code request failed: {e}")
-            logger.error(f"Response status: {getattr(e, 'response', None) and e.response.status_code}")
-            logger.error(f"Response body: {getattr(e, 'response', None) and e.response.text}")
+            response = getattr(e, "response", None)
+            if response is not None:
+                logger.error(f"Response status: {response.status_code}")
+                logger.error(f"Response body: {response.text}")
             return {
                 "status": "error",
                 "message": "I couldn't start the authentication process. Please try again later.",
