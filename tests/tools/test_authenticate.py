@@ -2,6 +2,7 @@
 
 import os
 import asyncio
+from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,7 +28,7 @@ from reachy_mini_conversation_app.tools.authenticate import (
 
 
 @pytest.fixture
-def mock_deps():
+def mock_deps() -> ToolDependencies:
     """Create mock ToolDependencies."""
     return ToolDependencies(
         reachy_mini=MagicMock(),
@@ -36,7 +37,7 @@ def mock_deps():
 
 
 @pytest.fixture
-def sample_jwt():
+def sample_jwt() -> str:
     """Create a sample JWT token for testing (not cryptographically valid)."""
     # Header: {"alg": "RS256", "typ": "JWT"}
     # Payload: {"sub": "user123", "name": "John Doe", "email": "john@example.com", "exp": 9999999999}
@@ -61,7 +62,7 @@ def sample_jwt():
 
 
 @pytest.fixture
-def expired_jwt():
+def expired_jwt() -> str:
     """Create a JWT token with expired timestamp."""
     import json
     import base64
@@ -81,7 +82,7 @@ def expired_jwt():
 
 
 @pytest.fixture(autouse=True)
-def clean_env():
+def clean_env() -> Generator[None, None, None]:
     """Clean environment variables before and after each test."""
     # Save original
     original_token = os.environ.get("ACCESS_TOKEN")
@@ -101,7 +102,7 @@ def clean_env():
 
 
 @pytest.fixture(autouse=True)
-def reset_polling_state():
+def reset_polling_state() -> Generator[None, None, None]:
     """Reset global polling state before each test."""
     import reachy_mini_conversation_app.tools.authenticate as auth_module
 
@@ -120,19 +121,19 @@ def reset_polling_state():
 class TestFormatCodeForSpeech:
     """Tests for format_code_for_speech function."""
 
-    def test_simple_code(self):
+    def test_simple_code(self) -> None:
         """Test formatting a simple code."""
         assert format_code_for_speech("ABCD1234") == "A B C D 1 2 3 4"
 
-    def test_code_with_dash(self):
+    def test_code_with_dash(self) -> None:
         """Test formatting a code with dashes."""
         assert format_code_for_speech("ABCD-1234") == "A B C D 1 2 3 4"
 
-    def test_code_with_spaces(self):
+    def test_code_with_spaces(self) -> None:
         """Test formatting a code with spaces."""
         assert format_code_for_speech("AB CD 12 34") == "A B C D 1 2 3 4"
 
-    def test_lowercase_code(self):
+    def test_lowercase_code(self) -> None:
         """Test formatting a lowercase code (should uppercase)."""
         assert format_code_for_speech("abcd1234") == "A B C D 1 2 3 4"
 
@@ -140,7 +141,7 @@ class TestFormatCodeForSpeech:
 class TestDecodeJwtPayload:
     """Tests for decode_jwt_payload function."""
 
-    def test_valid_jwt(self, sample_jwt):
+    def test_valid_jwt(self, sample_jwt: str) -> None:
         """Test decoding a valid JWT."""
         payload = decode_jwt_payload(sample_jwt)
         assert payload is not None
@@ -148,13 +149,13 @@ class TestDecodeJwtPayload:
         assert payload["name"] == "John Doe"
         assert payload["email"] == "john@example.com"
 
-    def test_invalid_jwt_format(self):
+    def test_invalid_jwt_format(self) -> None:
         """Test decoding an invalid JWT (not 3 parts)."""
         assert decode_jwt_payload("not.a.valid.jwt.token") is None
         assert decode_jwt_payload("onlyonepart") is None
         assert decode_jwt_payload("two.parts") is None
 
-    def test_invalid_base64(self):
+    def test_invalid_base64(self) -> None:
         """Test decoding a JWT with invalid base64."""
         assert decode_jwt_payload("header.!!!invalid!!!.signature") is None
 
@@ -162,11 +163,11 @@ class TestDecodeJwtPayload:
 class TestGetTokenInfo:
     """Tests for get_token_info function."""
 
-    def test_no_token(self):
+    def test_no_token(self) -> None:
         """Test when no token is set."""
         assert get_token_info() is None
 
-    def test_with_valid_token(self, sample_jwt):
+    def test_with_valid_token(self, sample_jwt: str) -> None:
         """Test when a valid token is set."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         info = get_token_info()
@@ -177,11 +178,11 @@ class TestGetTokenInfo:
 class TestPollingState:
     """Tests for polling state management."""
 
-    def test_is_polling_active_no_task(self):
+    def test_is_polling_active_no_task(self) -> None:
         """Test is_polling_active when no task exists."""
         assert is_polling_active() is False
 
-    def test_is_polling_active_with_done_task(self):
+    def test_is_polling_active_with_done_task(self) -> None:
         """Test is_polling_active when task is done."""
         import reachy_mini_conversation_app.tools.authenticate as auth_module
 
@@ -190,7 +191,7 @@ class TestPollingState:
         auth_module._polling_task = mock_task
         assert is_polling_active() is False
 
-    def test_is_polling_active_with_running_task(self):
+    def test_is_polling_active_with_running_task(self) -> None:
         """Test is_polling_active when task is running."""
         import reachy_mini_conversation_app.tools.authenticate as auth_module
 
@@ -199,11 +200,11 @@ class TestPollingState:
         auth_module._polling_task = mock_task
         assert is_polling_active() is True
 
-    def test_cancel_polling_no_task(self):
+    def test_cancel_polling_no_task(self) -> None:
         """Test cancel_polling when no task exists."""
         assert cancel_polling() is False
 
-    def test_cancel_polling_with_running_task(self):
+    def test_cancel_polling_with_running_task(self) -> None:
         """Test cancel_polling when task is running."""
         import reachy_mini_conversation_app.tools.authenticate as auth_module
 
@@ -225,7 +226,7 @@ class TestAuthenticateTool:
     """Tests for the Authenticate tool."""
 
     @pytest.mark.asyncio
-    async def test_no_client_id(self, mock_deps):
+    async def test_no_client_id(self, mock_deps: ToolDependencies) -> None:
         """Test authenticate fails when client ID is not configured."""
         tool = Authenticate()
 
@@ -240,7 +241,7 @@ class TestAuthenticateTool:
             assert "client id" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_already_authenticated(self, mock_deps, sample_jwt):
+    async def test_already_authenticated(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test authenticate returns early when already authenticated."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         tool = Authenticate()
@@ -256,7 +257,7 @@ class TestAuthenticateTool:
             assert "already connected" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_successful_device_code_request(self, mock_deps):
+    async def test_successful_device_code_request(self, mock_deps: ToolDependencies) -> None:
         """Test successful device code request."""
         tool = Authenticate()
 
@@ -294,7 +295,7 @@ class TestAuthenticateTool:
             assert "A B C D 1 2 3 4" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_device_code_request_failure(self, mock_deps):
+    async def test_device_code_request_failure(self, mock_deps: ToolDependencies) -> None:
         """Test handling of device code request failure."""
         import httpx
 
@@ -329,7 +330,7 @@ class TestWhoamiTool:
     """Tests for the Whoami tool."""
 
     @pytest.mark.asyncio
-    async def test_not_authenticated(self, mock_deps):
+    async def test_not_authenticated(self, mock_deps: ToolDependencies) -> None:
         """Test whoami when not authenticated."""
         tool = Whoami()
         result = await tool(mock_deps)
@@ -338,7 +339,7 @@ class TestWhoamiTool:
         assert "not connected" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_successful_userinfo(self, mock_deps, sample_jwt):
+    async def test_successful_userinfo(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test successful userinfo request."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         tool = Whoami()
@@ -374,7 +375,7 @@ class TestWhoamiTool:
             assert "John Doe" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_token_expired(self, mock_deps, sample_jwt):
+    async def test_token_expired(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test whoami when token is expired (401 response)."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         tool = Whoami()
@@ -401,7 +402,7 @@ class TestWhoamiTool:
             assert "expired" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_fallback_to_jwt(self, mock_deps, sample_jwt):
+    async def test_fallback_to_jwt(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test fallback to JWT decoding when userinfo fails."""
         import httpx
 
@@ -437,7 +438,7 @@ class TestCancelAuthenticationTool:
     """Tests for the CancelAuthentication tool."""
 
     @pytest.mark.asyncio
-    async def test_no_active_auth(self, mock_deps):
+    async def test_no_active_auth(self, mock_deps: ToolDependencies) -> None:
         """Test cancel when no authentication is in progress."""
         tool = CancelAuthentication()
         result = await tool(mock_deps)
@@ -446,7 +447,7 @@ class TestCancelAuthenticationTool:
         assert "no authentication" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_cancel_active_auth(self, mock_deps):
+    async def test_cancel_active_auth(self, mock_deps: ToolDependencies) -> None:
         """Test cancelling an active authentication."""
         import reachy_mini_conversation_app.tools.authenticate as auth_module
 
@@ -471,7 +472,7 @@ class TestLogoutTool:
     """Tests for the Logout tool."""
 
     @pytest.mark.asyncio
-    async def test_not_authenticated(self, mock_deps):
+    async def test_not_authenticated(self, mock_deps: ToolDependencies) -> None:
         """Test logout when not authenticated."""
         tool = Logout()
         result = await tool(mock_deps)
@@ -480,7 +481,7 @@ class TestLogoutTool:
         assert "not connected" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_successful_logout(self, mock_deps, sample_jwt):
+    async def test_successful_logout(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test successful logout."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         tool = Logout()
@@ -509,7 +510,7 @@ class TestLogoutTool:
             assert os.environ.get("ACCESS_TOKEN") is None
 
     @pytest.mark.asyncio
-    async def test_logout_clears_token_on_failure(self, mock_deps, sample_jwt):
+    async def test_logout_clears_token_on_failure(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test that logout clears local token even if revocation fails."""
         import httpx
 
@@ -546,7 +547,7 @@ class TestCheckTokenTool:
     """Tests for the CheckToken tool."""
 
     @pytest.mark.asyncio
-    async def test_not_authenticated(self, mock_deps):
+    async def test_not_authenticated(self, mock_deps: ToolDependencies) -> None:
         """Test check_token when not authenticated."""
         tool = CheckToken()
         result = await tool(mock_deps)
@@ -555,7 +556,7 @@ class TestCheckTokenTool:
         assert "not connected" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_token_valid(self, mock_deps, sample_jwt):
+    async def test_token_valid(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test check_token with a valid token."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         tool = CheckToken()
@@ -591,7 +592,7 @@ class TestCheckTokenTool:
             assert "valid" in result["message"].lower()
 
     @pytest.mark.asyncio
-    async def test_token_invalid(self, mock_deps, sample_jwt):
+    async def test_token_invalid(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test check_token with an invalid/revoked token."""
         os.environ["ACCESS_TOKEN"] = sample_jwt
         tool = CheckToken()
@@ -624,7 +625,7 @@ class TestCheckTokenTool:
             assert os.environ.get("ACCESS_TOKEN") is None
 
     @pytest.mark.asyncio
-    async def test_introspection_failure(self, mock_deps, sample_jwt):
+    async def test_introspection_failure(self, mock_deps: ToolDependencies, sample_jwt: str) -> None:
         """Test check_token when introspection request fails."""
         import httpx
 
@@ -660,19 +661,19 @@ class TestPollingBehavior:
     """Tests for the background polling behavior."""
 
     @pytest.mark.asyncio
-    async def test_polling_cancellation(self):
+    async def test_polling_cancellation(self) -> None:
         """Test that polling can be cancelled."""
         import reachy_mini_conversation_app.tools.authenticate as auth_module
 
         auth_module._polling_cancelled = False
 
-        async def fake_poll():
+        async def fake_poll() -> str:
             while not auth_module._polling_cancelled:
                 await asyncio.sleep(0.1)
             return "cancelled"
 
         task = asyncio.create_task(fake_poll())
-        auth_module._polling_task = task
+        auth_module._polling_task = task  # type: ignore[assignment]
 
         await asyncio.sleep(0.05)
         assert is_polling_active() is True
