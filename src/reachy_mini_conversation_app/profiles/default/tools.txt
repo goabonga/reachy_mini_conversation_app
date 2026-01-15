@@ -7,3 +7,7 @@ do_nothing
 head_tracking
 move_head
 authenticate
+cancel_authentication
+whoami
+logout
+check_token
